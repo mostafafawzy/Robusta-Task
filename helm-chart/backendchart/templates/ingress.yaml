@@ -1,0 +1,27 @@
+{{- if ((.Values.ingress.enabled)) -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    kubernetes.io/ingress.class: alb
+  finalizers:
+  - ingress.k8s.aws/resources
+  generation: 1
+  name: {{ include "backend.fullname" . }}
+  labels:
+    {{- include "backend.labels" . | nindent 4 }}
+  namespace: {{ .Values.namespace }}
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /*
+        pathType: ImplementationSpecific
+        backend:
+          service:
+            name: {{ include "backend.fullname" . }}
+            port:
+              number: 80
+{{- end -}}

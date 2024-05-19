@@ -1,0 +1,64 @@
+stages:
+  - build
+  - deploy
+
+variables:
+  IMAGE_FRONTEND:  232323323/robusta-frontend
+  IMAGE_BACKEND:   232323323/robusta-backend
+
+build-frontend:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building frontend image..."
+    - docker build -t $IMAGE_FRONTEND:$CI_COMMIT_SHA ./frontend
+    # - /kaniko/executor --context ./frontend --dockerfile ./frontend/Dockerfile --destination $IMAGE_FRONTEND:$CI_COMMIT_SHA
+    - echo "Logging into Docker Hub..."
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - echo "Pushing frontend image to Docker Hub..."
+    - docker push $IMAGE_FRONTEND:$CI_COMMIT_SHA
+
+    - echo "Building backend image..."
+    - docker build -t $IMAGE_BACKEND:$CI_COMMIT_SHA ./backend
+    - echo "Pushing backend image to Docker Hub..."
+    - docker push $IMAGE_BACKEND:$CI_COMMIT_SHA
+
+  only:
+    - main
+
+build-backend:
+  stage: build
+  image: docker:latest
+  services:
+    - docker:dind
+  script:
+    - echo "Building backend image..."
+    - docker build -t $IMAGE_BACKEND:$CI_COMMIT_SHA ./backend
+    - echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin
+    - echo "Pushing backend image to Docker Hub..."
+    - docker push $IMAGE_BACKEND:$CI_COMMIT_SHA
+
+  only:
+    - main
+
+
+deploy:
+  stage: deploy
+  image: 
+    name: lachlanevenson/k8s-helm:v3.7.0
+    entrypoint: [""]
+  tags:
+    - k8s
+  script: 
+    - wget -O /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/$(wget -qO- https://storage.googleapis.com/kubernetes-release/release/stable.txt)/bin/linux/amd64/kubectl
+    - chmod +x /usr/local/bin/kubectl
+    - echo "Deploying frontend..."
+    - helm upgrade --install frontend ./helm-charts/frontendchart  --set image.tag=$CI_COMMIT_SHA
+    - echo "Deploying backend..."
+    - helm upgrade --install backend ./helm-charts/backendchart --set image.tag=$CI_COMMIT_SHA
+    - kubectl apply -f mongo-deployment.yml
+    - echo "Deployments triggered successfully!"
+  only:
+    - main
